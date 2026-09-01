@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Gestión CFE — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --green: #16a34a; --green-bg: #ecfdf3;
+    --amber: #d97706; --amber-bg: #fffbeb;
+    --red: #dc2626; --red-bg: #fef2f2;
+    --blue: #2563eb; --blue-bg: #eff6ff;
+    --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb;
+    --card: #ffffff; --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 20px 24px 40px;
+  }
+  header.top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  header.top h1 { font-size: 20px; margin: 0 0 4px; }
+  header.top p { margin: 0; color: var(--muted); font-size: 13px; }
+  #syncInfo { text-align: right; font-size: 12px; color: var(--muted); }
+  #syncInfo .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:5px; }
+  #statusBanner { display: none; padding: 12px 16px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
+  #statusBanner.loading { display: block; background: var(--blue-bg); color: #1d4ed8; }
+  #statusBanner.error { display: block; background: var(--red-bg); color: #991b1b; white-space: pre-wrap; }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; }
+  .panel .sub { font-size: 12px; color: var(--muted); margin: -8px 0 12px; }
+
+  .featured-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom: 4px; }
+  select, input[type="text"] {
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; background:#fff; color:var(--ink);
+  }
+  .kpi-row { display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0 16px; }
+  @media (max-width: 700px) { .kpi-row { grid-template-columns: 1fr; } }
+  .kpi { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .kpi .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
+  .kpi .value { font-size: 22px; font-weight: 700; }
+
+  .chart-wrap { position: relative; height: 280px; }
+  .chart-wrap.small { height: 220px; }
+
+  .two-col { display:grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+  @media (max-width: 950px) { .two-col { grid-template-columns: 1fr; } }
+
+  .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+  .table-toolbar input { width: 240px; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data th, table.data td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.data th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--card); }
+  table.data th .arrow { font-size: 10px; color: var(--muted); margin-left: 3px; }
+  .table-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+
+  ul.breakdown { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+  ul.breakdown li { display:flex; justify-content:space-between; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  ul.breakdown li:last-child { border-bottom: none; }
+  ul.breakdown .count { font-weight: 600; }
+
+  footer { margin-top: 10px; font-size: 11.5px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>Gestión CFE</h1>
+    <p>Servicios solicitados — datos en vivo desde Google Sheets</p>
+  </div>
+  <div id="syncInfo">Cargando…</div>
+</header>
+
+<div id="statusBanner" class="loading">Conectando con la hoja de cálculo…</div>
+
+<div id="app" style="display:none;">
+
+  <div class="panel">
+    <div class="featured-head">
+      <h2 style="margin:0;">Servicios solicitados por semana</h2>
+      <select id="periodSelect"></select>
+    </div>
+    <p class="sub">Filtrado por <b>Fecha de atención</b>, agrupado en semanas laborales (lunes a viernes).</p>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">Servicios en el periodo</div><div class="value" id="kpiPeriodTotal">–</div></div>
+      <div class="kpi"><div class="label">Semanas cubiertas</div><div class="value" id="kpiWeeks">–</div></div>
+      <div class="kpi"><div class="label">Promedio por semana</div><div class="value" id="kpiAvg">–</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-wrap"><canvas id="weekChart"></canvas></div>
+      <div>
+        <h2 style="font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;">Servicios en el periodo</h2>
+        <ul class="breakdown" id="serviceBreakdown"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel" id="statusPanel" style="display:none;">
+      <h2>Estatus (todas las fechas)</h2>
+      <div class="chart-wrap small"><canvas id="statusChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Resumen general</h2>
+      <div class="kpi-row" style="grid-template-columns:1fr 1fr;">
+        <div class="kpi"><div class="label">Total de registros</div><div class="value" id="kpiTotal">–</div></div>
+        <div class="kpi"><div class="label">Sin fecha de atención</div><div class="value" id="kpiSinFecha">–</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="table-toolbar">
+      <h2 style="margin:0;">Detalle de registros (según periodo seleccionado)</h2>
+      <input type="text" id="searchBox" placeholder="Buscar en la tabla…" />
+    </div>
+    <div class="table-scroll">
+      <table class="data" id="dataTable">
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>Actualiza automáticamente cada 20 segundos · Fuente: Google Sheets "Req. Servicios | Ops" › Gestion CFE</footer>
+</div>
+
+<script>
+// ==== CONFIGURA ESTO: pega aquí la liga /exec de tu Apps Script ====
+var SCRIPT_URL = 'PEGA_AQUI_TU_LIGA_DE_APPS_SCRIPT_/exec';
+
+var REFRESH_MS = 20000;
+var state = { headers: [], rows: [], dateKey: null, serviceKey: null, statusKey: null, sortCol: null, sortDir: 1 };
+var weekChart = null, statusChart = null;
+
+function normalize(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+function findHeader(headers, exact, mustContainAll) {
+  var norm = headers.map(normalize);
+  for (var i = 0; i < exact.length; i++) {
+    var idx = norm.indexOf(normalize(exact[i]));
+    if (idx !== -1) return headers[idx];
+  }
+  for (var j = 0; j < headers.length; j++) {
+    var n = norm[j];
+    if (mustContainAll.every(function (tok) { return n.indexOf(tok) !== -1; })) return headers[j];
+  }
+  return null;
+}
+
+function parseFlexibleDate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  var s = String(v).trim();
+  var isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    var d1 = new Date(+isoMatch[1], +isoMatch[2] - 1, +isoMatch[3]);
+    return isNaN(d1) ? null : d1;
+  }
+  var dmyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmyMatch) {
+    var d2 = new Date(+dmyMatch[3], +dmyMatch[2] - 1, +dmyMatch[1]);
+    return isNaN(d2) ? null : d2;
+  }
+  var generic = new Date(s);
+  return isNaN(generic) ? null : generic;
+}
+
+function mondayOf(d) {
+  var date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var day = date.getDay();
+  var diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date;
+}
+function weekKey(monday) {
+  return monday.getFullYear() + '-' + String(monday.getMonth() + 1).padStart(2, '0') + '-' + String(monday.getDate()).padStart(2, '0');
+}
+function weekLabel(monday) {
+  var friday = new Date(monday); friday.setDate(friday.getDate() + 4);
+  var fmt = function (d) { return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }); };
+  return fmt(monday) + ' – ' + fmt(friday);
+}
+
+function buildWeekIndex(rows, dateKey) {
+  var map = {}; // key -> { monday, rows: [] }
+  rows.forEach(function (row) {
+    var d = parseFlexibleDate(row[dateKey]);
+    if (!d) return;
+    var mon = mondayOf(d);
+    var key = weekKey(mon);
+    if (!map[key]) map[key] = { key: key, monday: mon, rows: [] };
+    map[key].rows.push(row);
+  });
+  return Object.keys(map).sort().map(function (k) { return map[k]; }).reverse(); // desc
+}
+
+function populatePeriodSelect(weeks) {
+  var sel = document.getElementById('periodSelect');
+  var prev = sel.value;
+  sel.innerHTML = '';
+  var presets = [
+    ['all', 'Todas las fechas'],
+    ['current', 'Semana actual'],
+    ['last', 'Semana anterior'],
+    ['4w', 'Últimas 4 semanas'],
+    ['8w', 'Últimas 8 semanas']
+  ];
+  var g1 = document.createElement('optgroup'); g1.label = 'Rangos';
+  presets.forEach(function (p) {
+    var o = document.createElement('option'); o.value = p[0]; o.textContent = p[1]; g1.appendChild(o);
+  });
+  sel.appendChild(g1);
+
+  if (weeks.length) {
+    var g2 = document.createElement('optgroup'); g2.label = 'Semana específica';
+    weeks.forEach(function (w) {
+      var o = document.createElement('option'); o.value = 'w:' + w.key; o.textContent = weekLabel(w.monday);
+      g2.appendChild(o);
+    });
+    sel.appendChild(g2);
+  }
+  if (prev && Array.from(sel.options).some(function (o) { return o.value === prev; })) sel.value = prev;
+  else sel.value = '4w';
+}
+
+function selectedWeeks(weeks) {
+  var val = document.getElementById('periodSelect').value;
+  if (!weeks.length) return [];
+  if (val === 'all') return weeks.slice().reverse();
+  if (val.indexOf('w:') === 0) {
+    var key = val.slice(2);
+    var found = weeks.filter(function (w) { return w.key === key; });
+    return found;
+  }
+  var todayMonday = weekKey(mondayOf(new Date()));
+  if (val === 'current') return weeks.filter(function (w) { return w.key === todayMonday; });
+  if (val === 'last') {
+    var idx = weeks.findIndex(function (w) { return w.key === todayMonday; });
+    var prevIdx = idx === -1 ? 0 : idx + 1;
+    return weeks[prevIdx] ? [weeks[prevIdx]] : [];
+  }
+  var n = val === '4w' ? 4 : 8;
+  return weeks.slice(0, n).reverse();
+}
+
+function render() {
+  var headers = state.headers, rows = state.rows;
+  document.getElementById('kpiTotal').textContent = rows.length;
+
+  var weeks = state.dateKey ? buildWeekIndex(rows, state.dateKey) : [];
+  populatePeriodSelect(weeks);
+  var sinFecha = state.dateKey ? rows.filter(function (r) { return !parseFlexibleDate(r[state.dateKey]); }).length : rows.length;
+  document.getElementById('kpiSinFecha').textContent = sinFecha;
+
+  var chosen = selectedWeeks(weeks); // chronological asc
+  var periodRows = [];
+  chosen.forEach(function (w) { periodRows = periodRows.concat(w.rows); });
+
+  document.getElementById('kpiPeriodTotal').textContent = periodRows.length;
+  document.getElementById('kpiWeeks').textContent = chosen.length;
+  document.getElementById('kpiAvg').textContent = chosen.length ? Math.round(periodRows.length / chosen.length * 10) / 10 : 0;
+
+  // Week chart
+  var labels = chosen.map(function (w) { return weekLabel(w.monday); });
+  var ctx = document.getElementById('weekChart').getContext('2d');
+  var datasets;
+  var serviceValues = [];
+  if (state.serviceKey) {
+    var valueSet = {};
+    periodRows.forEach(function (r) { var v = String(r[state.serviceKey] || 'Sin dato').trim() || 'Sin dato'; valueSet[v] = true; });
+    serviceValues = Object.keys(valueSet);
+  }
+  if (state.serviceKey && serviceValues.length && serviceValues.length <= 8) {
+    var palette = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
+    datasets = serviceValues.map(function (val, i) {
+      return {
+        label: val,
+        data: chosen.map(function (w) {
+          return w.rows.filter(function (r) { return (String(r[state.serviceKey] || 'Sin dato').trim() || 'Sin dato') === val; }).length;
+        }),
+        backgroundColor: palette[i % palette.length]
+      };
+    });
+  } else {
+    datasets = [{ label: 'Servicios', data: chosen.map(function (w) { return w.rows.length; }), backgroundColor: '#2563eb' }];
+  }
+  if (weekChart) weekChart.destroy();
+  weekChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: datasets.length > 1, position: 'bottom', labels: { boxWidth: 10, font: { size: 10.5 } } } },
+      scales: { x: { stacked: datasets.length > 1 }, y: { stacked: datasets.length > 1, beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+
+  // Service breakdown list for the period
+  var breakdownEl = document.getElementById('serviceBreakdown');
+  breakdownEl.innerHTML = '';
+  if (state.serviceKey) {
+    var counts = {};
+    periodRows.forEach(function (r) { var v = String(r[state.serviceKey] || 'Sin dato').trim() || 'Sin dato'; counts[v] = (counts[v] || 0) + 1; });
+    Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 12).forEach(function (k) {
+      var li = document.createElement('li');
+      li.innerHTML = '<span>' + k + '</span><span class="count">' + counts[k] + '</span>';
+      breakdownEl.appendChild(li);
+    });
+  } else {
+    breakdownEl.innerHTML = '<li><span>No se detectó una columna de servicio solicitado.</span></li>';
+  }
+
+  // Status chart (all data, not period-filtered)
+  var statusPanel = document.getElementById('statusPanel');
+  if (state.statusKey) {
+    statusPanel.style.display = '';
+    var scounts = {};
+    rows.forEach(function (r) { var v = String(r[state.statusKey] || 'Sin dato').trim() || 'Sin dato'; scounts[v] = (scounts[v] || 0) + 1; });
+    var sLabels = Object.keys(scounts);
+    var sCtx = document.getElementById('statusChart').getContext('2d');
+    if (statusChart) statusChart.destroy();
+    statusChart = new Chart(sCtx, {
+      type: 'doughnut',
+      data: { labels: sLabels, datasets: [{ data: sLabels.map(function (l) { return scounts[l]; }), backgroundColor: ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d'] }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10.5 } } } } }
+    });
+  } else {
+    statusPanel.style.display = 'none';
+  }
+
+  state.tableRows = periodRows.length ? periodRows : rows;
+  renderTable(state.tableRows, headers);
+}
+
+function renderTable(rows, headers) {
+  var head = document.getElementById('tableHead');
+  head.innerHTML = '';
+  headers.forEach(function (h) {
+    var th = document.createElement('th');
+    th.textContent = h;
+    th.onclick = function () {
+      state.sortDir = state.sortCol === h ? -state.sortDir : 1;
+      state.sortCol = h;
+      renderTableBody(rows, headers);
+    };
+    head.appendChild(th);
+  });
+  renderTableBody(rows, headers);
+}
+
+function renderTableBody(rows, headers) {
+  var body = document.getElementById('tableBody');
+  var filterTerm = normalize(document.getElementById('searchBox').value);
+  var filtered = rows.filter(function (r) {
+    if (!filterTerm) return true;
+    return headers.some(function (h) { return normalize(r[h]).indexOf(filterTerm) !== -1; });
+  });
+  if (state.sortCol) {
+    filtered = filtered.slice().sort(function (a, b) {
+      var av = a[state.sortCol], bv = b[state.sortCol];
+      if (av === bv) return 0;
+      return (av > bv ? 1 : -1) * state.sortDir;
+    });
+  }
+  body.innerHTML = '';
+  filtered.slice(0, 500).forEach(function (r) {
+    var tr = document.createElement('tr');
+    headers.forEach(function (h) {
+      var td = document.createElement('td');
+      td.textContent = r[h] === null || r[h] === undefined ? '' : r[h];
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+function setBanner(mode, msg) {
+  var b = document.getElementById('statusBanner');
+  if (!mode) { b.style.display = 'none'; return; }
+  b.className = mode;
+  b.textContent = msg;
+}
+
+function loadData() {
+  fetch(SCRIPT_URL, { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (json) {
+      if (!json.ok) throw new Error(json.error || 'Error desconocido del Apps Script');
+      var data = json.data;
+      state.headers = data.headers || [];
+      state.rows = data.rows || [];
+      state.dateKey = findHeader(state.headers, ['Fecha de atención', 'Fecha de Atencion', 'Fecha atencion'], ['fecha', 'atenc']);
+      state.serviceKey = findHeader(state.headers, ['Servicios solicitados', 'Servicio solicitado'], ['servicio']);
+      state.statusKey = findHeader(state.headers, ['Estatus', 'Estado', 'Status'], ['estat']);
+
+      document.getElementById('syncInfo').innerHTML = '<span class="dot"></span>Actualizado ' + new Date(data.updatedAt).toLocaleTimeString('es-MX');
+      setBanner(null);
+      document.getElementById('app').style.display = '';
+      render();
+    })
+    .catch(function (err) {
+      setBanner('error', 'No se pudo cargar la información.\n' + err.message + '\n\nVerifica que SCRIPT_URL esté configurado correctamente en index.html y que el Apps Script esté desplegado como "Anyone".');
+    });
+}
+
+document.getElementById('searchBox').addEventListener('input', function () { renderTableBody(state.tableRows || state.rows, state.headers); });
+document.getElementById('periodSelect').addEventListener('change', render);
+
+setBanner('loading', 'Conectando con la hoja de cálculo…');
+loadData();
+setInterval(loadData, REFRESH_MS);
+</script>
+</body>
+</html>
