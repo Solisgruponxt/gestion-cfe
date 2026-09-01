@@ -134,7 +134,7 @@
 
 <script>
 // ==== CONFIGURA ESTO: pega aquí la liga /exec de tu Apps Script ====
-var SCRIPT_URL = 'PEGA_AQUI_TU_LIGA_DE_APPS_SCRIPT_/exec';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
 var REFRESH_MS = 20000;
 var state = { headers: [], rows: [], dateKey: null, serviceKey: null, statusKey: null, sortCol: null, sortDir: 1 };
@@ -339,7 +339,7 @@ function render() {
   }
 
   state.tableRows = periodRows.length ? periodRows : rows;
-  renderTable(state.tableRows, headers);
+  renderTable(state.tableRows, state.tableHeaders);
 }
 
 function renderTable(rows, headers) {
@@ -399,6 +399,9 @@ function loadData() {
       var data = json.data;
       state.headers = data.headers || [];
       state.rows = data.rows || [];
+      state.tableHeaders = state.headers.filter(function (h) {
+        return state.rows.some(function (r) { return String(r[h] === undefined || r[h] === null ? '' : r[h]).trim() !== ''; });
+      });
       state.dateKey = findHeader(state.headers, ['Fecha de atención', 'Fecha de Atencion', 'Fecha atencion'], ['fecha', 'atenc']);
       state.serviceKey = findHeader(state.headers, ['Servicios solicitados', 'Servicio solicitado'], ['servicio']);
       state.statusKey = findHeader(state.headers, ['Estatus', 'Estado', 'Status'], ['estat']);
@@ -413,7 +416,7 @@ function loadData() {
     });
 }
 
-document.getElementById('searchBox').addEventListener('input', function () { renderTableBody(state.tableRows || state.rows, state.headers); });
+document.getElementById('searchBox').addEventListener('input', function () { renderTableBody(state.tableRows || state.rows, state.tableHeaders || state.headers); });
 document.getElementById('periodSelect').addEventListener('change', render);
 
 setBanner('loading', 'Conectando con la hoja de cálculo…');
