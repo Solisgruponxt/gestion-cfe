@@ -209,7 +209,7 @@
     <div class="featured-head">
       <h2 style="margin:0;">KPI´s por servicio</h2>
     </div>
-    <p class="sub">Filtrado por <b>Fecha de atención</b>. Usa el calendario para un rango exacto, o el selector para semanas laborales (lunes a viernes). KPI = Realizadas / (Realizadas + En proceso), por cada <b>Servicio Solicitado</b> (Libranzas, Instalación de Medidores, Retiro de Candado, etc.).</p>
+    <p class="sub">Filtrado por <b>Marca temporal</b> (fecha de solicitud, para no excluir lo que aún está en proceso y no tiene fecha de atención). Usa el calendario para un rango exacto, o el selector para semanas laborales (lunes a viernes). KPI = Realizadas / (Realizadas + En proceso), por cada <b>Servicio Solicitado</b> (Libranzas, Instalación de Medidores, Retiro de Candado, etc.).</p>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
       <select id="kpiPeriodSelect"></select>
       <label style="font-size:12px; color:var(--muted);">Desde <input type="date" id="kpiDateFrom"></label>
@@ -228,7 +228,7 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
 var REFRESH_MS = 10000;
-var state = { headers: [], rows: [], dateKey: null, serviceKey: null, responsableKey: null, statusKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, kpiCustomRange: { from: null, to: null }, filters: { service: null, responsable: null } };
+var state = { headers: [], rows: [], dateKey: null, timestampKey: null, serviceKey: null, responsableKey: null, statusKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, kpiCustomRange: { from: null, to: null }, filters: { service: null, responsable: null } };
 
 function toggleFilter(field, value) {
   state.filters[field] = state.filters[field] === value ? null : value;
@@ -369,14 +369,14 @@ function selectedWeeks(selectId, weeks) {
   return weeks.slice(0, n).reverse();
 }
 
-function chosenWeeksForRender(selectId, weeks, customRange) {
+function chosenWeeksForRender(selectId, weeks, customRange, dateKey) {
   if (customRange.from || customRange.to) {
     var fromD = customRange.from ? new Date(customRange.from + 'T00:00:00') : null;
     var toD = customRange.to ? new Date(customRange.to + 'T23:59:59') : null;
     var map = {};
     weeks.forEach(function (w) {
       var kept = w.rows.filter(function (r) {
-        var d = parseFlexibleDate(r[state.dateKey]);
+        var d = parseFlexibleDate(r[dateKey]);
         if (!d) return false;
         if (fromD && d < fromD) return false;
         if (toD && d > toD) return false;
@@ -395,7 +395,7 @@ function render() {
   var weeks = state.dateKey ? buildWeekIndex(rows, state.dateKey) : [];
   populatePeriodSelect('periodSelect', weeks, state.customRange, 'last');
 
-  var chosen = chosenWeeksForRender('periodSelect', weeks, state.customRange); // chronological asc
+  var chosen = chosenWeeksForRender('periodSelect', weeks, state.customRange, state.dateKey); // chronological asc
   var periodRows = [];
   chosen.forEach(function (w) { periodRows = periodRows.concat(w.rows); });
 
@@ -568,9 +568,9 @@ function renderKpisPage() {
   var container = document.getElementById('kpiCards');
   if (!container) return;
 
-  var weeks = state.dateKey ? buildWeekIndex(state.rows, state.dateKey) : [];
+  var weeks = state.timestampKey ? buildWeekIndex(state.rows, state.timestampKey) : [];
   populatePeriodSelect('kpiPeriodSelect', weeks, state.kpiCustomRange, 'last');
-  var chosen = chosenWeeksForRender('kpiPeriodSelect', weeks, state.kpiCustomRange);
+  var chosen = chosenWeeksForRender('kpiPeriodSelect', weeks, state.kpiCustomRange, state.timestampKey);
   var filtered = [];
   chosen.forEach(function (w) { filtered = filtered.concat(w.rows); });
 
@@ -625,6 +625,7 @@ function loadData() {
         return hasData || isKeyColumn;
       }));
       state.dateKey = findHeader(state.headers, ['Fecha de atención', 'Fecha de Atencion', 'Fecha atencion'], ['fecha', 'atenc']);
+      state.timestampKey = findHeader(state.headers, ['Marca temporal'], ['marca', 'temporal']);
       state.serviceKey = findHeader(state.headers, ['Servicio Solicitado', 'Servicios solicitados'], ['servicio']);
       state.responsableKey = findHeader(state.headers, ['Responsable'], ['responsab']);
       state.statusKey = findHeader(state.headers, ['Estatus', 'Estado', 'Status'], ['estat']);
