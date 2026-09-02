@@ -583,7 +583,7 @@ function renderKpisPage() {
       g.total++;
       var n = normalize(state.statusKey ? r[state.statusKey] : '');
       if (n.indexOf('realiz') !== -1) g.realizada++;
-      else if (n && n.indexOf('rechaz') === -1) g.proceso++;
+      else if (n.indexOf('proceso') !== -1) g.proceso++;
     });
     var denom = g.realizada + g.proceso;
     var pct = denom > 0 ? (g.realizada / denom * 100) : null;
