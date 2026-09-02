@@ -197,7 +197,6 @@
 
   <div class="panel">
     <h2 style="margin:0;">Pendientes por asignar</h2>
-    <p class="sub">Servicios solicitados sin <b>Estatus de Medición</b> asignado — se muestran todos, sin importar el periodo seleccionado arriba.</p>
     <div class="table-scroll" style="max-height:320px;">
       <table class="data" id="pendingTable">
         <thead><tr><th>RPU</th><th>Proyecto</th><th>División</th><th>Zona CFE</th><th>Servicio Solicitado</th><th>Estatus Medición</th><th>Responsable</th></tr></thead>
@@ -639,7 +638,7 @@ function renderPendingPage() {
     var tr = document.createElement('tr');
     tr.innerHTML = cols.map(function (key) {
       var v = key ? r[key] : '';
-      return '<td>' + (v === undefined || v === null || v === '' ? '<span style="color:var(--muted);">—</span>' : v) + '</td>';
+      return '<td>' + (v === undefined || v === null ? '' : v) + '</td>';
     }).join('');
     body.appendChild(tr);
   });
