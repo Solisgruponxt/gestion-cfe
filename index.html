@@ -199,7 +199,7 @@
     <h2 style="margin:0;">Pendientes por asignar</h2>
     <div class="table-scroll" style="max-height:320px;">
       <table class="data" id="pendingTable">
-        <thead><tr><th>RPU</th><th>Proyecto</th><th>División</th><th>Zona CFE</th><th>Servicio Solicitado</th><th>Estatus Medición</th><th>Responsable</th></tr></thead>
+        <thead><tr><th>Marca temporal</th><th>RPU</th><th>Proyecto</th><th>División</th><th>Zona CFE</th><th>Servicio Solicitado</th><th>Estatus Medición</th><th>Responsable</th></tr></thead>
         <tbody id="pendingBody"></tbody>
       </table>
     </div>
@@ -630,10 +630,10 @@ function renderPendingPage() {
 
   body.innerHTML = '';
   if (!pending.length) {
-    body.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No hay servicios pendientes por asignar.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No hay servicios pendientes por asignar.</td></tr>';
     return;
   }
-  var cols = [state.rpuKey, state.proyectoKey, state.divisionKey, state.zonaCfeKey, state.serviceKey, state.statusKey, state.responsableKey];
+  var cols = [state.timestampKey, state.rpuKey, state.proyectoKey, state.divisionKey, state.zonaCfeKey, state.serviceKey, state.statusKey, state.responsableKey];
   pending.forEach(function (r) {
     var tr = document.createElement('tr');
     tr.innerHTML = cols.map(function (key) {
