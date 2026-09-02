@@ -118,8 +118,8 @@
 <div class="app-shell">
   <nav class="sidebar">
     <div class="sidebar-brand">Gestión CFE</div>
-    <button class="nav-item" type="button" data-page="kpis">KPI´s</button>
-    <button class="nav-item active" type="button" data-page="dashboard">Servicios Solicitados</button>
+    <button class="nav-item active" type="button" data-page="kpis">KPI´s</button>
+    <button class="nav-item" type="button" data-page="dashboard">Servicios Solicitados</button>
   </nav>
 
   <div class="main">
@@ -132,7 +132,7 @@
   <div id="syncInfo">Cargando…</div>
 </header>
 
-<div id="page-dashboard">
+<div id="page-dashboard" style="display:none;">
 
 <div id="statusBanner" class="loading">Conectando con la hoja de cálculo…</div>
 
@@ -200,7 +200,7 @@
 
 </div>
 
-<div id="page-kpis" style="display:none;">
+<div id="page-kpis">
   <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h1 style="margin:0; font-size:22px;">KPI´S</h1>
@@ -583,7 +583,7 @@ function renderKpisPage() {
       g.total++;
       var n = normalize(state.statusKey ? r[state.statusKey] : '');
       if (n.indexOf('realiz') !== -1) g.realizada++;
-      else if (n.indexOf('proceso') !== -1) g.proceso++;
+      else if (n && n.indexOf('rechaz') === -1) g.proceso++;
     });
     var denom = g.realizada + g.proceso;
     var pct = denom > 0 ? (g.realizada / denom * 100) : null;
