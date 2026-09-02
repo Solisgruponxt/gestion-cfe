@@ -420,8 +420,16 @@ function render() {
   populatePeriodSelect('periodSelect', weeks, state.customRange, 'last');
 
   var chosen = chosenWeeksForRender('periodSelect', weeks, state.customRange, state.dateKey); // chronological asc
-  var periodRows = [];
-  chosen.forEach(function (w) { periodRows = periodRows.concat(w.rows); });
+  var periodRows;
+  var usingAllDates = document.getElementById('periodSelect').value === 'all' && !(state.customRange.from || state.customRange.to);
+  if (usingAllDates) {
+    // "Todas las fechas" debe incluir literalmente todos los registros, incluso los que no
+    // tienen Fecha de atención (pendientes, en proceso, etc.), no solo los agrupables por semana.
+    periodRows = rows.slice();
+  } else {
+    periodRows = [];
+    chosen.forEach(function (w) { periodRows = periodRows.concat(w.rows); });
+  }
 
   document.getElementById('kpiPeriodTotal').textContent = periodRows.length;
   document.getElementById('kpiWeeks').textContent = chosen.length;
@@ -621,8 +629,14 @@ function renderKpisPage() {
   var weeks = state.timestampKey ? buildWeekIndex(state.rows, state.timestampKey) : [];
   populatePeriodSelect('kpiPeriodSelect', weeks, state.kpiCustomRange, 'last');
   var chosen = chosenWeeksForRender('kpiPeriodSelect', weeks, state.kpiCustomRange, state.timestampKey);
-  var filtered = [];
-  chosen.forEach(function (w) { filtered = filtered.concat(w.rows); });
+  var filtered;
+  var usingAllDates = document.getElementById('kpiPeriodSelect').value === 'all' && !(state.kpiCustomRange.from || state.kpiCustomRange.to);
+  if (usingAllDates) {
+    filtered = state.rows.slice();
+  } else {
+    filtered = [];
+    chosen.forEach(function (w) { filtered = filtered.concat(w.rows); });
+  }
 
   container.innerHTML = '';
   TRACKED_KPI_SERVICES.forEach(function (tracked) {
