@@ -97,6 +97,19 @@
   ul.breakdown li:last-child { border-bottom: none; }
   ul.breakdown .count { font-weight: 600; }
 
+  .kpi-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; margin-top: 14px; }
+  .kpi-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+  .kpi-card-icon { width: 108px; height: 108px; object-fit: contain; }
+  .kpi-card-title { font-weight: 700; font-size: 14px; }
+  .kpi-card-stats { display: flex; justify-content: center; gap: 16px; }
+  .kpi-card-stats div { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .kpi-card-stats b { display: block; font-size: 17px; font-weight: 700; color: var(--ink); text-transform: none; letter-spacing: 0; margin-top: 2px; }
+  .kpi-badge { align-self: center; padding: 6px 16px; border-radius: 999px; font-weight: 700; font-size: 15px; }
+  .kpi-badge.good { background: var(--green-bg); color: var(--green); }
+  .kpi-badge.warn { background: var(--amber-bg); color: var(--amber); }
+  .kpi-badge.bad { background: var(--red-bg); color: var(--red); }
+  .kpi-badge.na { background: var(--card); color: var(--muted); border: 1px dashed var(--line); }
+
   footer { margin-top: 10px; font-size: 11.5px; color: var(--muted); text-align: center; }
 </style>
 </head>
@@ -105,8 +118,8 @@
 <div class="app-shell">
   <nav class="sidebar">
     <div class="sidebar-brand">Gestión CFE</div>
+    <button class="nav-item" type="button" data-page="kpis">KPI´s</button>
     <button class="nav-item active" type="button" data-page="dashboard">Servicios Solicitados</button>
-    <button class="nav-item" type="button" data-page="ejemplo">KPI´s</button>
   </nav>
 
   <div class="main">
@@ -187,11 +200,23 @@
 
 </div>
 
-<div id="page-ejemplo" style="display:none;">
+<div id="page-kpis" style="display:none;">
   <div class="panel">
-    <h2>KPI´s</h2>
-    <p class="sub">Página de prueba para el menú de navegación.</p>
-    <p style="font-size:13px;">Esta sección demuestra que el menú lateral puede alojar varios reportes independientes (por ejemplo, "Soporte", "Libranzas" o "Renovación de Software"), cada uno con sus propias gráficas y tablas conectadas a otra pestaña del Google Sheet.</p>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h1 style="margin:0; font-size:22px;">KPI´S</h1>
+      <img src="icons/nxtview-logo.png" alt="nxtview" style="height:96px; width:auto;">
+    </div>
+    <div class="featured-head">
+      <h2 style="margin:0;">KPI´s por servicio</h2>
+    </div>
+    <p class="sub">Filtrado por <b>Fecha de atención</b>. Usa el calendario para un rango exacto, o el selector para semanas laborales (lunes a viernes). KPI = Realizadas / (Realizadas + En proceso), por cada <b>Servicio Solicitado</b> (Libranzas, Instalación de Medidores, Retiro de Candado, etc.).</p>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+      <select id="kpiPeriodSelect"></select>
+      <label style="font-size:12px; color:var(--muted);">Desde <input type="date" id="kpiDateFrom"></label>
+      <label style="font-size:12px; color:var(--muted);">Hasta <input type="date" id="kpiDateTo"></label>
+      <button id="kpiClearBtn" type="button" style="border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer; color:var(--muted);">Limpiar</button>
+    </div>
+    <div id="kpiCards" class="kpi-cards-grid"></div>
   </div>
 </div>
 
@@ -203,7 +228,7 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
 var REFRESH_MS = 20000;
-var state = { headers: [], rows: [], dateKey: null, serviceKey: null, responsableKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, filters: { service: null, responsable: null } };
+var state = { headers: [], rows: [], dateKey: null, serviceKey: null, responsableKey: null, statusKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, kpiCustomRange: { from: null, to: null }, filters: { service: null, responsable: null } };
 
 function toggleFilter(field, value) {
   state.filters[field] = state.filters[field] === value ? null : value;
@@ -287,11 +312,11 @@ function buildWeekIndex(rows, dateKey) {
   return Object.keys(map).sort().map(function (k) { return map[k]; }).reverse(); // desc
 }
 
-function populatePeriodSelect(weeks) {
-  var sel = document.getElementById('periodSelect');
+function populatePeriodSelect(selectId, weeks, customRange, defaultValue) {
+  var sel = document.getElementById(selectId);
   var prev = sel.value;
   sel.innerHTML = '';
-  var usingCustom = !!(state.customRange.from || state.customRange.to);
+  var usingCustom = !!(customRange.from || customRange.to);
 
   if (usingCustom) {
     var oc = document.createElement('option'); oc.value = 'custom'; oc.textContent = 'Rango personalizado (calendario)';
@@ -321,11 +346,11 @@ function populatePeriodSelect(weeks) {
   }
   if (usingCustom) sel.value = 'custom';
   else if (prev && Array.from(sel.options).some(function (o) { return o.value === prev; })) sel.value = prev;
-  else sel.value = 'last';
+  else sel.value = defaultValue;
 }
 
-function selectedWeeks(weeks) {
-  var val = document.getElementById('periodSelect').value;
+function selectedWeeks(selectId, weeks) {
+  var val = document.getElementById(selectId).value;
   if (!weeks.length) return [];
   if (val === 'all') return weeks.slice().reverse();
   if (val.indexOf('w:') === 0) {
@@ -344,10 +369,10 @@ function selectedWeeks(weeks) {
   return weeks.slice(0, n).reverse();
 }
 
-function chosenWeeksForRender(weeks) {
-  if (state.customRange.from || state.customRange.to) {
-    var fromD = state.customRange.from ? new Date(state.customRange.from + 'T00:00:00') : null;
-    var toD = state.customRange.to ? new Date(state.customRange.to + 'T23:59:59') : null;
+function chosenWeeksForRender(selectId, weeks, customRange) {
+  if (customRange.from || customRange.to) {
+    var fromD = customRange.from ? new Date(customRange.from + 'T00:00:00') : null;
+    var toD = customRange.to ? new Date(customRange.to + 'T23:59:59') : null;
     var map = {};
     weeks.forEach(function (w) {
       var kept = w.rows.filter(function (r) {
@@ -361,16 +386,16 @@ function chosenWeeksForRender(weeks) {
     });
     return Object.keys(map).sort().map(function (k) { return map[k]; }); // ascending
   }
-  return selectedWeeks(weeks);
+  return selectedWeeks(selectId, weeks);
 }
 
 function render() {
   var headers = state.headers, rows = state.rows;
 
   var weeks = state.dateKey ? buildWeekIndex(rows, state.dateKey) : [];
-  populatePeriodSelect(weeks);
+  populatePeriodSelect('periodSelect', weeks, state.customRange, 'last');
 
-  var chosen = chosenWeeksForRender(weeks); // chronological asc
+  var chosen = chosenWeeksForRender('periodSelect', weeks, state.customRange); // chronological asc
   var periodRows = [];
   chosen.forEach(function (w) { periodRows = periodRows.concat(w.rows); });
 
@@ -522,6 +547,63 @@ function renderTableBody(rows, headers) {
   });
 }
 
+var KPI_ICONS = {
+  porteo: 'icons/porteo.png',
+  soporte: 'icons/soporte.png',
+  libranzas: 'icons/libranzas.png',
+  inst_medidores: 'icons/inst_medidores.png',
+  renovacion_software: 'icons/renovacion_software.png',
+  retiro_candado: 'icons/retiro_candado.png',
+  conf_medidores: 'icons/conf_medidores.png'
+};
+
+var TRACKED_KPI_SERVICES = [
+  { label: 'Configuración de Medidores', icon: KPI_ICONS.conf_medidores, match: function (n) { return n.indexOf('config') !== -1 && n.indexOf('medidor') !== -1; } },
+  { label: 'Instalación de Medidores', icon: KPI_ICONS.inst_medidores, match: function (n) { return n.indexOf('instalac') !== -1 && n.indexOf('medidor') !== -1; } },
+  { label: 'Libranzas', icon: KPI_ICONS.libranzas, match: function (n) { return n.indexOf('libranz') !== -1; } },
+  { label: 'Retiro de Candado', icon: KPI_ICONS.retiro_candado, match: function (n) { return n.indexOf('retiro') !== -1 && n.indexOf('candado') !== -1; } }
+];
+
+function renderKpisPage() {
+  var container = document.getElementById('kpiCards');
+  if (!container) return;
+
+  var weeks = state.dateKey ? buildWeekIndex(state.rows, state.dateKey) : [];
+  populatePeriodSelect('kpiPeriodSelect', weeks, state.kpiCustomRange, 'last');
+  var chosen = chosenWeeksForRender('kpiPeriodSelect', weeks, state.kpiCustomRange);
+  var filtered = [];
+  chosen.forEach(function (w) { filtered = filtered.concat(w.rows); });
+
+  container.innerHTML = '';
+  TRACKED_KPI_SERVICES.forEach(function (tracked) {
+    var g = { realizada: 0, proceso: 0, total: 0 };
+    filtered.forEach(function (r) {
+      var svc = state.serviceKey ? String(r[state.serviceKey] || '').trim() : '';
+      if (!tracked.match(normalize(svc))) return;
+      g.total++;
+      var n = normalize(state.statusKey ? r[state.statusKey] : '');
+      if (n.indexOf('realiz') !== -1) g.realizada++;
+      else if (n.indexOf('proceso') !== -1) g.proceso++;
+    });
+    var denom = g.realizada + g.proceso;
+    var pct = denom > 0 ? (g.realizada / denom * 100) : null;
+    var badgeClass = pct === null ? 'na' : pct >= 90 ? 'good' : pct >= 70 ? 'warn' : 'bad';
+    var badgeText = pct === null ? 'Sin datos' : pct.toFixed(2) + '%';
+    var card = document.createElement('div');
+    card.className = 'kpi-card';
+    card.innerHTML =
+      (tracked.icon ? '<img class="kpi-card-icon" src="' + tracked.icon + '" alt="">' : '') +
+      '<div class="kpi-card-title">' + tracked.label + '</div>' +
+      '<div class="kpi-card-stats">' +
+        '<div>Realizadas<b>' + g.realizada + '</b></div>' +
+        '<div>En proceso<b>' + g.proceso + '</b></div>' +
+        '<div>Total<b>' + g.total + '</b></div>' +
+      '</div>' +
+      '<div class="kpi-badge ' + badgeClass + '">KPI: ' + badgeText + '</div>';
+    container.appendChild(card);
+  });
+}
+
 function setBanner(mode, msg) {
   var b = document.getElementById('statusBanner');
   if (!mode) { b.style.display = 'none'; return; }
@@ -545,11 +627,13 @@ function loadData() {
       state.dateKey = findHeader(state.headers, ['Fecha de atención', 'Fecha de Atencion', 'Fecha atencion'], ['fecha', 'atenc']);
       state.serviceKey = findHeader(state.headers, ['Servicio Solicitado', 'Servicios solicitados'], ['servicio']);
       state.responsableKey = findHeader(state.headers, ['Responsable'], ['responsab']);
+      state.statusKey = findHeader(state.headers, ['Estatus', 'Estado', 'Status'], ['estat']);
 
       document.getElementById('syncInfo').innerHTML = '<span class="dot"></span>Actualizado ' + new Date(data.updatedAt).toLocaleTimeString('es-MX');
       setBanner(null);
       document.getElementById('app').style.display = '';
       render();
+      renderKpisPage();
     })
     .catch(function (err) {
       setBanner('error', 'No se pudo cargar la información.\n' + err.message + '\n\nVerifica que SCRIPT_URL esté configurado correctamente en index.html y que el Apps Script esté desplegado como "Anyone".');
@@ -574,13 +658,30 @@ document.getElementById('clearRangeBtn').addEventListener('click', function () {
   render();
 });
 
+document.getElementById('kpiPeriodSelect').addEventListener('change', function () {
+  if (this.value !== 'custom') {
+    state.kpiCustomRange = { from: null, to: null };
+    document.getElementById('kpiDateFrom').value = '';
+    document.getElementById('kpiDateTo').value = '';
+  }
+  renderKpisPage();
+});
+document.getElementById('kpiDateFrom').addEventListener('change', function () { state.kpiCustomRange.from = this.value || null; renderKpisPage(); });
+document.getElementById('kpiDateTo').addEventListener('change', function () { state.kpiCustomRange.to = this.value || null; renderKpisPage(); });
+document.getElementById('kpiClearBtn').addEventListener('click', function () {
+  state.kpiCustomRange = { from: null, to: null };
+  document.getElementById('kpiDateFrom').value = '';
+  document.getElementById('kpiDateTo').value = '';
+  renderKpisPage();
+});
+
 document.querySelectorAll('.nav-item').forEach(function (btn) {
   btn.addEventListener('click', function () {
     document.querySelectorAll('.nav-item').forEach(function (b) { b.classList.remove('active'); });
     btn.classList.add('active');
     var page = btn.dataset.page;
     document.getElementById('page-dashboard').style.display = page === 'dashboard' ? '' : 'none';
-    document.getElementById('page-ejemplo').style.display = page === 'ejemplo' ? '' : 'none';
+    document.getElementById('page-kpis').style.display = page === 'kpis' ? '' : 'none';
   });
 });
 
