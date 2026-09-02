@@ -279,6 +279,21 @@ function findHeader(headers, exact, mustContainAll) {
 
 // Orden de lectura de la tabla de detalle: lo esencial primero, lo descriptivo al final
 var TABLE_COLUMN_ORDER = ['RPU', 'Fecha de atención', 'Servicio Solicitado', 'División', 'Responsable', 'Solicitante', 'Estatus', 'Comentarios'].map(normalize);
+
+// Columnas que nunca deben mostrarse en "Detalle de registros", aunque tengan datos.
+var EXCLUDED_DETAIL_COLUMNS = [
+  'Fecha de última solicitud', 'Columna 44', 'Fecha de Estimada', 'Fecha de atención',
+  'Comunicacion', 'Archivo respaldo', 'Comentarios', 'Comentarios Medición',
+  'Comentarios Ventanas y Mantenimientos', 'Documentación', 'Tipo de Soporte',
+  'Acceso para soporte', 'Cuadrilla Asignada', 'División de CFE', 'Nombre del Proyecto',
+  'Fecha de la ventana', 'Horario de Ventana', 'Licencias', 'Información de el servicio',
+  'Servicio', 'IP (Principal)', 'IP (Respaldo)', 'Mascara', 'Getway (GTW)',
+  'Puerto de Comunicación', 'Carta Cesión', 'Ficha de pago', 'Comprobante de Pago'
+].concat((function () {
+  var cols = [];
+  for (var i = 46; i <= 84; i++) cols.push('Column ' + i);
+  return cols;
+})()).map(normalize);
 function orderHeaders(headers) {
   return headers.slice().sort(function (a, b) {
     var ia = TABLE_COLUMN_ORDER.indexOf(normalize(a));
@@ -714,6 +729,7 @@ function loadData() {
       state.headers = data.headers || [];
       state.rows = data.rows || [];
       state.tableHeaders = orderHeaders(state.headers.filter(function (h) {
+        if (EXCLUDED_DETAIL_COLUMNS.indexOf(normalize(h)) !== -1) return false;
         var hasData = state.rows.some(function (r) { return String(r[h] === undefined || r[h] === null ? '' : r[h]).trim() !== ''; });
         var isKeyColumn = TABLE_COLUMN_ORDER.indexOf(normalize(h)) !== -1;
         return hasData || isKeyColumn;
