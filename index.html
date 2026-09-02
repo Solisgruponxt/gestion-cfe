@@ -195,7 +195,7 @@
     </div>
   </div>
 
-  <footer>Actualiza automáticamente cada 20 segundos · Fuente: Google Sheets "Req. Servicios | Ops" › Gestion CFE</footer>
+  <footer>Actualiza automáticamente cada 10 segundos · Fuente: Google Sheets "Req. Servicios | Ops" › Gestion CFE</footer>
 </div>
 
 </div>
@@ -227,7 +227,7 @@
 // ==== CONFIGURA ESTO: pega aquí la liga /exec de tu Apps Script ====
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
-var REFRESH_MS = 20000;
+var REFRESH_MS = 10000;
 var state = { headers: [], rows: [], dateKey: null, serviceKey: null, responsableKey: null, statusKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, kpiCustomRange: { from: null, to: null }, filters: { service: null, responsable: null } };
 
 function toggleFilter(field, value) {
@@ -637,6 +637,9 @@ function loadData() {
     })
     .catch(function (err) {
       setBanner('error', 'No se pudo cargar la información.\n' + err.message + '\n\nVerifica que SCRIPT_URL esté configurado correctamente en index.html y que el Apps Script esté desplegado como "Anyone".');
+    })
+    .finally(function () {
+      setTimeout(loadData, REFRESH_MS);
     });
 }
 
@@ -687,7 +690,6 @@ document.querySelectorAll('.nav-item').forEach(function (btn) {
 
 setBanner('loading', 'Conectando con la hoja de cálculo…');
 loadData();
-setInterval(loadData, REFRESH_MS);
 </script>
 </body>
 </html>
