@@ -195,6 +195,17 @@
     </div>
   </div>
 
+  <div class="panel">
+    <h2 style="margin:0;">Pendientes por asignar</h2>
+    <p class="sub">Servicios solicitados sin <b>Estatus de Medición</b> asignado — se muestran todos, sin importar el periodo seleccionado arriba.</p>
+    <div class="table-scroll" style="max-height:320px;">
+      <table class="data" id="pendingTable">
+        <thead><tr><th>RPU</th><th>Proyecto</th><th>División</th><th>Zona CFE</th><th>Servicio Solicitado</th><th>Estatus Medición</th><th>Responsable</th></tr></thead>
+        <tbody id="pendingBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <footer>Actualiza automáticamente cada 10 segundos · Fuente: Google Sheets "Req. Servicios | Ops" › Gestion CFE</footer>
 </div>
 
@@ -610,6 +621,30 @@ function renderKpisPage() {
   });
 }
 
+function renderPendingPage() {
+  var body = document.getElementById('pendingBody');
+  if (!body) return;
+
+  var pending = state.rows.filter(function (r) {
+    return state.statusKey ? !String(r[state.statusKey] || '').trim() : false;
+  });
+
+  body.innerHTML = '';
+  if (!pending.length) {
+    body.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No hay servicios pendientes por asignar.</td></tr>';
+    return;
+  }
+  var cols = [state.rpuKey, state.proyectoKey, state.divisionKey, state.zonaCfeKey, state.serviceKey, state.statusKey, state.responsableKey];
+  pending.forEach(function (r) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = cols.map(function (key) {
+      var v = key ? r[key] : '';
+      return '<td>' + (v === undefined || v === null || v === '' ? '<span style="color:var(--muted);">—</span>' : v) + '</td>';
+    }).join('');
+    body.appendChild(tr);
+  });
+}
+
 function setBanner(mode, msg) {
   var b = document.getElementById('statusBanner');
   if (!mode) { b.style.display = 'none'; return; }
@@ -635,12 +670,17 @@ function loadData() {
       state.serviceKey = findHeader(state.headers, ['Servicio Solicitado', 'Servicios solicitados'], ['servicio']);
       state.responsableKey = findHeader(state.headers, ['Responsable'], ['responsab']);
       state.statusKey = findHeader(state.headers, ['Estatus', 'Estado', 'Status'], ['estat']);
+      state.rpuKey = findHeader(state.headers, ['RPU'], ['rpu']);
+      state.proyectoKey = findHeader(state.headers, ['Proyecto'], ['proyecto']);
+      state.divisionKey = findHeader(state.headers, ['División', 'Division'], ['divisi']);
+      state.zonaCfeKey = findHeader(state.headers, ['Zona CFE'], ['zona']);
 
       document.getElementById('syncInfo').innerHTML = '<span class="dot"></span>Actualizado ' + new Date(data.updatedAt).toLocaleTimeString('es-MX');
       setBanner(null);
       document.getElementById('app').style.display = '';
       render();
       renderKpisPage();
+      renderPendingPage();
     })
     .catch(function (err) {
       setBanner('error', 'No se pudo cargar la información.\n' + err.message + '\n\nVerifica que SCRIPT_URL esté configurado correctamente en index.html y que el Apps Script esté desplegado como "Anyone".');
