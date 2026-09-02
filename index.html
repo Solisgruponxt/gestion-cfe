@@ -558,7 +558,13 @@ var KPI_ICONS = {
 };
 
 var TRACKED_KPI_SERVICES = [
-  { label: 'Configuración de Medidores', icon: KPI_ICONS.conf_medidores, match: function (n) { return n.indexOf('config') !== -1 && n.indexOf('medidor') !== -1; } },
+  { label: 'Configuración de Medidores', icon: KPI_ICONS.conf_medidores, match: function (n) {
+    return (n.indexOf('entrega') !== -1 && n.indexOf('medidor') !== -1) ||
+      n.indexOf('reconfigurac') !== -1 ||
+      (n.indexOf('alta') !== -1 && n.indexOf('medidor') !== -1) ||
+      (n.indexOf('programac') !== -1 && n.indexOf('medidor') !== -1) ||
+      (n.indexOf('visita') !== -1 && n.indexOf('conjunt') !== -1);
+  } },
   { label: 'Instalación de Medidores', icon: KPI_ICONS.inst_medidores, match: function (n) { return n.indexOf('instalac') !== -1 && n.indexOf('medidor') !== -1; } },
   { label: 'Libranzas', icon: KPI_ICONS.libranzas, match: function (n) { return n.indexOf('libranz') !== -1; } },
   { label: 'Retiro de Candado', icon: KPI_ICONS.retiro_candado, match: function (n) { return n.indexOf('retiro') !== -1 && n.indexOf('candado') !== -1; } }
