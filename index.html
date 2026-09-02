@@ -69,9 +69,9 @@
   .three-col { display:grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px; }
   @media (max-width: 950px) { .three-col { grid-template-columns: 1fr; } }
 
-  .four-col { display:grid; grid-template-columns: 1.1fr 1fr 1fr 1fr; gap: 16px; }
-  @media (max-width: 1300px) { .four-col { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 700px) { .four-col { grid-template-columns: 1fr; } }
+  .four-col { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 1300px) { .four-col { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  @media (max-width: 700px) { .four-col { grid-template-columns: minmax(0, 1fr); } }
 
   .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
   .table-toolbar input { width: 240px; }
@@ -515,7 +515,13 @@ function render() {
   statusEl.innerHTML = '';
   if (state.statusKey) {
     var scounts = {};
-    periodRows.forEach(function (r) { var v = String(r[state.statusKey] || 'Sin dato').trim() || 'Sin dato'; scounts[v] = (scounts[v] || 0) + 1; });
+    var statusCounted = 0;
+    periodRows.forEach(function (r) {
+      var v = String(r[state.statusKey] || '').trim();
+      if (!v) return; // omitir "Sin dato"
+      scounts[v] = (scounts[v] || 0) + 1;
+      statusCounted++;
+    });
     Object.keys(scounts).sort(function (a, b) { return scounts[b] - scounts[a]; }).forEach(function (k) {
       var tr = document.createElement('tr');
       tr.className = 'clickable' + (state.filters.status === k ? ' selected' : '');
@@ -523,7 +529,7 @@ function render() {
       tr.onclick = function () { toggleFilter('status', k); };
       statusEl.appendChild(tr);
     });
-    document.getElementById('statusTotalCount').textContent = periodRows.length;
+    document.getElementById('statusTotalCount').textContent = statusCounted;
   } else {
     statusEl.innerHTML = '<tr><td colspan="2">No se detectó una columna de estatus.</td></tr>';
     document.getElementById('statusTotalCount').textContent = 0;
