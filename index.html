@@ -114,17 +114,11 @@
     </div>
   </div>
 
-  <div class="two-col">
-    <div class="panel" id="statusPanel" style="display:none;">
-      <h2>Estatus (periodo seleccionado)</h2>
-      <div class="chart-wrap small"><canvas id="statusChart"></canvas></div>
-    </div>
-    <div class="panel">
-      <h2>Resumen general</h2>
-      <div class="kpi-row" style="grid-template-columns:1fr 1fr;">
-        <div class="kpi"><div class="label">Total de registros</div><div class="value" id="kpiTotal">–</div></div>
-        <div class="kpi"><div class="label">Sin fecha de atención</div><div class="value" id="kpiSinFecha">–</div></div>
-      </div>
+  <div class="panel">
+    <h2>Resumen general</h2>
+    <div class="kpi-row" style="grid-template-columns:1fr 1fr;">
+      <div class="kpi"><div class="label">Total de registros</div><div class="value" id="kpiTotal">–</div></div>
+      <div class="kpi"><div class="label">Sin fecha de atención</div><div class="value" id="kpiSinFecha">–</div></div>
     </div>
   </div>
 
@@ -149,8 +143,8 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
 var REFRESH_MS = 20000;
-var state = { headers: [], rows: [], dateKey: null, serviceKey: null, statusKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null } };
-var weekChart = null, statusChart = null;
+var state = { headers: [], rows: [], dateKey: null, serviceKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null } };
+var weekChart = null;
 
 function normalize(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -310,21 +304,27 @@ function render() {
   document.getElementById('kpiWeeks').textContent = chosen.length;
   document.getElementById('kpiAvg').textContent = chosen.length ? Math.round(periodRows.length / chosen.length * 10) / 10 : 0;
 
-  // Week chart
-  var labels = chosen.map(function (w) { return weekLabel(w.monday); });
+  // Service breakdown for the period (chart + table share the same counts)
+  var servicePalette = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#0d9488', '#9333ea'];
+  var counts = {};
+  if (state.serviceKey) {
+    periodRows.forEach(function (r) { var v = String(r[state.serviceKey] || 'Sin dato').trim() || 'Sin dato'; counts[v] = (counts[v] || 0) + 1; });
+  }
+  var serviceLabels = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+
+  // Week chart: servicios solicitados en el periodo, uno por color
   var ctx = document.getElementById('weekChart').getContext('2d');
-  var weekPalette = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#0d9488', '#9333ea'];
   var datasets = [{
     label: 'Servicios',
-    data: chosen.map(function (w) { return w.rows.length; }),
-    backgroundColor: chosen.map(function (w, i) { return weekPalette[i % weekPalette.length]; })
+    data: serviceLabels.map(function (l) { return counts[l]; }),
+    backgroundColor: serviceLabels.map(function (l, i) { return servicePalette[i % servicePalette.length]; })
   }];
   if (weekChart) weekChart.destroy();
   weekChart = new Chart(ctx, {
-    type: 'pie',
-    data: { labels: labels, datasets: datasets },
+    type: 'doughnut',
+    data: { labels: serviceLabels, datasets: datasets },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false, cutout: '45%',
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10.5 } } },
         datalabels: {
@@ -341,9 +341,7 @@ function render() {
   var breakdownEl = document.getElementById('serviceBreakdown');
   breakdownEl.innerHTML = '';
   if (state.serviceKey) {
-    var counts = {};
-    periodRows.forEach(function (r) { var v = String(r[state.serviceKey] || 'Sin dato').trim() || 'Sin dato'; counts[v] = (counts[v] || 0) + 1; });
-    Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).forEach(function (k) {
+    serviceLabels.forEach(function (k) {
       var tr = document.createElement('tr');
       tr.innerHTML = '<td>' + k + '</td><td style="text-align:right;">' + counts[k] + '</td>';
       breakdownEl.appendChild(tr);
@@ -352,24 +350,6 @@ function render() {
   } else {
     breakdownEl.innerHTML = '<tr><td colspan="2">No se detectó una columna de servicio solicitado.</td></tr>';
     document.getElementById('serviceTotalCount').textContent = 0;
-  }
-
-  // Status chart (mismo periodo seleccionado)
-  var statusPanel = document.getElementById('statusPanel');
-  if (state.statusKey) {
-    statusPanel.style.display = '';
-    var scounts = {};
-    periodRows.forEach(function (r) { var v = String(r[state.statusKey] || 'Sin dato').trim() || 'Sin dato'; scounts[v] = (scounts[v] || 0) + 1; });
-    var sLabels = Object.keys(scounts);
-    var sCtx = document.getElementById('statusChart').getContext('2d');
-    if (statusChart) statusChart.destroy();
-    statusChart = new Chart(sCtx, {
-      type: 'doughnut',
-      data: { labels: sLabels, datasets: [{ data: sLabels.map(function (l) { return scounts[l]; }), backgroundColor: ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d'] }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10.5 } } } } }
-    });
-  } else {
-    statusPanel.style.display = 'none';
   }
 
   state.tableRows = periodRows.length ? periodRows : rows;
@@ -437,8 +417,7 @@ function loadData() {
         return state.rows.some(function (r) { return String(r[h] === undefined || r[h] === null ? '' : r[h]).trim() !== ''; });
       });
       state.dateKey = findHeader(state.headers, ['Fecha de atención', 'Fecha de Atencion', 'Fecha atencion'], ['fecha', 'atenc']);
-      state.serviceKey = findHeader(state.headers, ['Servicios solicitados', 'Servicio solicitado'], ['servicio']);
-      state.statusKey = findHeader(state.headers, ['Estatus', 'Estado', 'Status'], ['estat']);
+      state.serviceKey = findHeader(state.headers, ['Servicio Solicitado', 'Servicios solicitados'], ['servicio']);
 
       document.getElementById('syncInfo').innerHTML = '<span class="dot"></span>Actualizado ' + new Date(data.updatedAt).toLocaleTimeString('es-MX');
       setBanner(null);
