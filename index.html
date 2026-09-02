@@ -47,9 +47,13 @@
 
   .chart-wrap { position: relative; height: 280px; }
   .chart-wrap.small { height: 220px; }
+  .chart-wrap.donut canvas { filter: drop-shadow(0 4px 10px rgba(31, 41, 55, .18)); }
 
   .two-col { display:grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
   @media (max-width: 950px) { .two-col { grid-template-columns: 1fr; } }
+
+  .three-col { display:grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 950px) { .three-col { grid-template-columns: 1fr; } }
 
   .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
   .table-toolbar input { width: 240px; }
@@ -99,8 +103,8 @@
       <div class="kpi"><div class="label">Promedio por semana</div><div class="value" id="kpiAvg">–</div></div>
     </div>
 
-    <div class="two-col">
-      <div class="chart-wrap"><canvas id="weekChart"></canvas></div>
+    <div class="three-col">
+      <div class="chart-wrap donut"><canvas id="weekChart"></canvas></div>
       <div>
         <h2 style="font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;">Detalle de servicios solicitados y contabilizados</h2>
         <div class="table-scroll" style="max-height:280px;">
@@ -108,6 +112,16 @@
             <thead><tr><th>Servicio solicitado</th><th style="text-align:right;">Contabilizados</th></tr></thead>
             <tbody id="serviceBreakdown"></tbody>
             <tfoot><tr style="font-weight:700;"><td>Total</td><td style="text-align:right;" id="serviceTotalCount">0</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h2 style="font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;">Servicios por responsable</h2>
+        <div class="table-scroll" style="max-height:280px;">
+          <table class="data" id="responsableTable">
+            <thead><tr><th>Responsable</th><th style="text-align:right;">Servicios</th></tr></thead>
+            <tbody id="responsableBreakdown"></tbody>
+            <tfoot><tr style="font-weight:700;"><td>Total</td><td style="text-align:right;" id="responsableTotalCount">0</td></tr></tfoot>
           </table>
         </div>
       </div>
@@ -143,7 +157,7 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
 var REFRESH_MS = 20000;
-var state = { headers: [], rows: [], dateKey: null, serviceKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null } };
+var state = { headers: [], rows: [], dateKey: null, serviceKey: null, responsableKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null } };
 var weekChart = null;
 
 function normalize(s) {
@@ -244,7 +258,7 @@ function populatePeriodSelect(weeks) {
   }
   if (usingCustom) sel.value = 'custom';
   else if (prev && Array.from(sel.options).some(function (o) { return o.value === prev; })) sel.value = prev;
-  else sel.value = '4w';
+  else sel.value = 'last';
 }
 
 function selectedWeeks(weeks) {
@@ -328,7 +342,9 @@ function render() {
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10.5 } } },
         datalabels: {
-          color: '#fff',
+          color: '#111827',
+          textStrokeColor: '#ffffff',
+          textStrokeWidth: 3,
           font: { size: 11, weight: '600' },
           formatter: function (value, ctx) { return ctx.chart.data.labels[ctx.dataIndex] + '\n' + value; }
         }
@@ -352,7 +368,24 @@ function render() {
     document.getElementById('serviceTotalCount').textContent = 0;
   }
 
-  state.tableRows = periodRows.length ? periodRows : rows;
+  // Responsable breakdown table for the period
+  var responsableEl = document.getElementById('responsableBreakdown');
+  responsableEl.innerHTML = '';
+  if (state.responsableKey) {
+    var rcounts = {};
+    periodRows.forEach(function (r) { var v = String(r[state.responsableKey] || 'Sin dato').trim() || 'Sin dato'; rcounts[v] = (rcounts[v] || 0) + 1; });
+    Object.keys(rcounts).sort(function (a, b) { return rcounts[b] - rcounts[a]; }).forEach(function (k) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + k + '</td><td style="text-align:right;">' + rcounts[k] + '</td>';
+      responsableEl.appendChild(tr);
+    });
+    document.getElementById('responsableTotalCount').textContent = periodRows.length;
+  } else {
+    responsableEl.innerHTML = '<tr><td colspan="2">No se detectó una columna de responsable.</td></tr>';
+    document.getElementById('responsableTotalCount').textContent = 0;
+  }
+
+  state.tableRows = periodRows;
   renderTable(state.tableRows, state.tableHeaders);
 }
 
@@ -418,6 +451,7 @@ function loadData() {
       });
       state.dateKey = findHeader(state.headers, ['Fecha de atención', 'Fecha de Atencion', 'Fecha atencion'], ['fecha', 'atenc']);
       state.serviceKey = findHeader(state.headers, ['Servicio Solicitado', 'Servicios solicitados'], ['servicio']);
+      state.responsableKey = findHeader(state.headers, ['Responsable'], ['responsab']);
 
       document.getElementById('syncInfo').innerHTML = '<span class="dot"></span>Actualizado ' + new Date(data.updatedAt).toLocaleTimeString('es-MX');
       setBanner(null);
