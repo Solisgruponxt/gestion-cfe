@@ -63,6 +63,21 @@
   table.data th .arrow { font-size: 10px; color: var(--muted); margin-left: 3px; }
   .table-scroll { max-height: 480px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 
+  table.data tbody tr.clickable { cursor: pointer; }
+  table.data tbody tr.clickable:hover { background: var(--blue-bg); }
+  table.data tbody tr.selected { background: var(--blue-bg); box-shadow: inset 3px 0 0 var(--blue); }
+
+  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin: -4px 0 10px; }
+  .filter-row:empty { margin: 0; }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 6px; background: var(--blue-bg); color: #1d4ed8;
+    border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 12px; font-weight: 600;
+  }
+  .filter-chip button {
+    border: none; background: rgba(29,78,216,.15); color: #1d4ed8; border-radius: 50%;
+    width: 18px; height: 18px; line-height: 1; cursor: pointer; font-size: 12px;
+  }
+
   ul.breakdown { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
   ul.breakdown li { display:flex; justify-content:space-between; padding: 6px 0; border-bottom: 1px dashed var(--line); }
   ul.breakdown li:last-child { border-bottom: none; }
@@ -129,18 +144,11 @@
   </div>
 
   <div class="panel">
-    <h2>Resumen general</h2>
-    <div class="kpi-row" style="grid-template-columns:1fr 1fr;">
-      <div class="kpi"><div class="label">Total de registros</div><div class="value" id="kpiTotal">–</div></div>
-      <div class="kpi"><div class="label">Sin fecha de atención</div><div class="value" id="kpiSinFecha">–</div></div>
-    </div>
-  </div>
-
-  <div class="panel">
     <div class="table-toolbar">
       <h2 style="margin:0;">Detalle de registros (según periodo seleccionado)</h2>
       <input type="text" id="searchBox" placeholder="Buscar en la tabla…" />
     </div>
+    <div id="activeFilters" class="filter-row"></div>
     <div class="table-scroll">
       <table class="data" id="dataTable">
         <thead><tr id="tableHead"></tr></thead>
@@ -157,7 +165,12 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
 var REFRESH_MS = 20000;
-var state = { headers: [], rows: [], dateKey: null, serviceKey: null, responsableKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null } };
+var state = { headers: [], rows: [], dateKey: null, serviceKey: null, responsableKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, filters: { service: null, responsable: null } };
+
+function toggleFilter(field, value) {
+  state.filters[field] = state.filters[field] === value ? null : value;
+  render();
+}
 var weekChart = null;
 
 function normalize(s) {
@@ -175,6 +188,18 @@ function findHeader(headers, exact, mustContainAll) {
     if (mustContainAll.every(function (tok) { return n.indexOf(tok) !== -1; })) return headers[j];
   }
   return null;
+}
+
+// Orden de lectura de la tabla de detalle: lo esencial primero, lo descriptivo al final
+var TABLE_COLUMN_ORDER = ['Fecha de atención', 'Servicio Solicitado', 'División', 'Responsable', 'Solicitante', 'Estatus', 'Comentarios'].map(normalize);
+function orderHeaders(headers) {
+  return headers.slice().sort(function (a, b) {
+    var ia = TABLE_COLUMN_ORDER.indexOf(normalize(a));
+    var ib = TABLE_COLUMN_ORDER.indexOf(normalize(b));
+    if (ia === -1) ia = TABLE_COLUMN_ORDER.length + headers.indexOf(a);
+    if (ib === -1) ib = TABLE_COLUMN_ORDER.length + headers.indexOf(b);
+    return ia - ib;
+  });
 }
 
 function parseFlexibleDate(v) {
@@ -303,12 +328,9 @@ function chosenWeeksForRender(weeks) {
 
 function render() {
   var headers = state.headers, rows = state.rows;
-  document.getElementById('kpiTotal').textContent = rows.length;
 
   var weeks = state.dateKey ? buildWeekIndex(rows, state.dateKey) : [];
   populatePeriodSelect(weeks);
-  var sinFecha = state.dateKey ? rows.filter(function (r) { return !parseFlexibleDate(r[state.dateKey]); }).length : rows.length;
-  document.getElementById('kpiSinFecha').textContent = sinFecha;
 
   var chosen = chosenWeeksForRender(weeks); // chronological asc
   var periodRows = [];
@@ -339,6 +361,9 @@ function render() {
     data: { labels: serviceLabels, datasets: datasets },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '45%',
+      onClick: function (evt, elements) {
+        if (elements.length) toggleFilter('service', serviceLabels[elements[0].index]);
+      },
       plugins: {
         legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10.5 } } },
         datalabels: {
@@ -352,6 +377,7 @@ function render() {
     },
     plugins: [ChartDataLabels]
   });
+  document.getElementById('weekChart').style.cursor = serviceLabels.length ? 'pointer' : 'default';
 
   // Service breakdown table for the period (full list, "solicitados y contabilizados")
   var breakdownEl = document.getElementById('serviceBreakdown');
@@ -359,7 +385,9 @@ function render() {
   if (state.serviceKey) {
     serviceLabels.forEach(function (k) {
       var tr = document.createElement('tr');
+      tr.className = 'clickable' + (state.filters.service === k ? ' selected' : '');
       tr.innerHTML = '<td>' + k + '</td><td style="text-align:right;">' + counts[k] + '</td>';
+      tr.onclick = function () { toggleFilter('service', k); };
       breakdownEl.appendChild(tr);
     });
     document.getElementById('serviceTotalCount').textContent = periodRows.length;
@@ -376,7 +404,9 @@ function render() {
     periodRows.forEach(function (r) { var v = String(r[state.responsableKey] || 'Sin dato').trim() || 'Sin dato'; rcounts[v] = (rcounts[v] || 0) + 1; });
     Object.keys(rcounts).sort(function (a, b) { return rcounts[b] - rcounts[a]; }).forEach(function (k) {
       var tr = document.createElement('tr');
+      tr.className = 'clickable' + (state.filters.responsable === k ? ' selected' : '');
       tr.innerHTML = '<td>' + k + '</td><td style="text-align:right;">' + rcounts[k] + '</td>';
+      tr.onclick = function () { toggleFilter('responsable', k); };
       responsableEl.appendChild(tr);
     });
     document.getElementById('responsableTotalCount').textContent = periodRows.length;
@@ -385,7 +415,30 @@ function render() {
     document.getElementById('responsableTotalCount').textContent = 0;
   }
 
-  state.tableRows = periodRows;
+  // Active filters (from chart/table clicks) narrow the detail table below
+  var filteredRows = periodRows.filter(function (r) {
+    if (state.filters.service && (String(r[state.serviceKey] || 'Sin dato').trim() || 'Sin dato') !== state.filters.service) return false;
+    if (state.filters.responsable && (String(r[state.responsableKey] || 'Sin dato').trim() || 'Sin dato') !== state.filters.responsable) return false;
+    return true;
+  });
+
+  var activeFiltersEl = document.getElementById('activeFilters');
+  activeFiltersEl.innerHTML = '';
+  [['service', 'Servicio'], ['responsable', 'Responsable']].forEach(function (pair) {
+    var field = pair[0], label = pair[1];
+    if (!state.filters[field]) return;
+    var chip = document.createElement('span');
+    chip.className = 'filter-chip';
+    chip.innerHTML = '<span>' + label + ': ' + state.filters[field] + '</span>';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '×';
+    btn.onclick = function () { toggleFilter(field, state.filters[field]); };
+    chip.appendChild(btn);
+    activeFiltersEl.appendChild(chip);
+  });
+
+  state.tableRows = filteredRows;
   renderTable(state.tableRows, state.tableHeaders);
 }
 
@@ -446,9 +499,11 @@ function loadData() {
       var data = json.data;
       state.headers = data.headers || [];
       state.rows = data.rows || [];
-      state.tableHeaders = state.headers.filter(function (h) {
-        return state.rows.some(function (r) { return String(r[h] === undefined || r[h] === null ? '' : r[h]).trim() !== ''; });
-      });
+      state.tableHeaders = orderHeaders(state.headers.filter(function (h) {
+        var hasData = state.rows.some(function (r) { return String(r[h] === undefined || r[h] === null ? '' : r[h]).trim() !== ''; });
+        var isKeyColumn = TABLE_COLUMN_ORDER.indexOf(normalize(h)) !== -1;
+        return hasData || isKeyColumn;
+      }));
       state.dateKey = findHeader(state.headers, ['Fecha de atención', 'Fecha de Atencion', 'Fecha atencion'], ['fecha', 'atenc']);
       state.serviceKey = findHeader(state.headers, ['Servicio Solicitado', 'Servicios solicitados'], ['servicio']);
       state.responsableKey = findHeader(state.headers, ['Responsable'], ['responsab']);
