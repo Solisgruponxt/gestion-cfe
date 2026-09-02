@@ -40,24 +40,39 @@ function getData_() {
     return { updatedAt: new Date().toISOString(), headers: [], rows: [] };
   }
 
-  var headers = values[0].map(function (h) { return String(h).trim(); });
-  var rows = [];
+  var rawHeaders = values[0].map(function (h) { return String(h).trim(); });
 
+  var rawRows = [];
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
     var isEmpty = row.every(function (c) { return c === '' || c === null; });
     if (isEmpty) continue;
+    rawRows.push(row);
+  }
 
+  // Se omiten columnas sin ningún dato en toda la hoja: reduce el peso de la
+  // respuesta (y el tiempo de transferencia) sin perder ninguna columna real.
+  var colIndexes = [];
+  var headers = [];
+  for (var c = 0; c < rawHeaders.length; c++) {
+    var hasData = rawRows.some(function (row) { return row[c] !== '' && row[c] !== null && row[c] !== undefined; });
+    if (hasData) {
+      colIndexes.push(c);
+      headers.push(rawHeaders[c] || ('col' + c));
+    }
+  }
+
+  var rows = rawRows.map(function (row) {
     var obj = {};
-    for (var c = 0; c < headers.length; c++) {
-      var v = row[c];
+    for (var i = 0; i < colIndexes.length; i++) {
+      var v = row[colIndexes[i]];
       if (Object.prototype.toString.call(v) === '[object Date]') {
         v = Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
       }
-      obj[headers[c] || ('col' + c)] = v;
+      obj[headers[i]] = v;
     }
-    rows.push(obj);
-  }
+    return obj;
+  });
 
   return { updatedAt: new Date().toISOString(), headers: headers, rows: rows };
 }
