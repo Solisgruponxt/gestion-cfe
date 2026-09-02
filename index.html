@@ -69,6 +69,10 @@
   .three-col { display:grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px; }
   @media (max-width: 950px) { .three-col { grid-template-columns: 1fr; } }
 
+  .four-col { display:grid; grid-template-columns: 1.1fr 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 1300px) { .four-col { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 700px) { .four-col { grid-template-columns: 1fr; } }
+
   .table-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
   .table-toolbar input { width: 240px; }
   table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -156,7 +160,7 @@
       <div class="kpi"><div class="label">Promedio por semana</div><div class="value" id="kpiAvg">–</div></div>
     </div>
 
-    <div class="three-col">
+    <div class="four-col">
       <div class="chart-wrap donut"><canvas id="weekChart"></canvas></div>
       <div>
         <h2 style="font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;">Detalle de servicios solicitados</h2>
@@ -175,6 +179,16 @@
             <thead><tr><th>Responsable</th><th style="text-align:right;">Servicios</th></tr></thead>
             <tbody id="responsableBreakdown"></tbody>
             <tfoot><tr style="font-weight:700;"><td>Total</td><td style="text-align:right;" id="responsableTotalCount">0</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h2 style="font-size:12.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;">Estatus de Medición</h2>
+        <div class="table-scroll" style="max-height:280px;">
+          <table class="data" id="statusTable">
+            <thead><tr><th>Estatus</th><th style="text-align:right;">Total</th></tr></thead>
+            <tbody id="statusBreakdown"></tbody>
+            <tfoot><tr style="font-weight:700;"><td>Total</td><td style="text-align:right;" id="statusTotalCount">0</td></tr></tfoot>
           </table>
         </div>
       </div>
@@ -238,7 +252,7 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp2k3aVvBMI3hpAuxec4RzyyG6wS0LH9iwXlKlIW2YA8uUFPOwN3LGs1M6Zv0344j/exec';
 
 var REFRESH_MS = 10000;
-var state = { headers: [], rows: [], dateKey: null, timestampKey: null, serviceKey: null, responsableKey: null, statusKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, kpiCustomRange: { from: null, to: null }, filters: { service: null, responsable: null } };
+var state = { headers: [], rows: [], dateKey: null, timestampKey: null, serviceKey: null, responsableKey: null, statusKey: null, sortCol: null, sortDir: 1, customRange: { from: null, to: null }, kpiCustomRange: { from: null, to: null }, filters: { service: null, responsable: null, status: null } };
 
 function toggleFilter(field, value) {
   state.filters[field] = state.filters[field] === value ? null : value;
@@ -488,16 +502,36 @@ function render() {
     document.getElementById('responsableTotalCount').textContent = 0;
   }
 
+  // Status breakdown table for the period
+  var statusEl = document.getElementById('statusBreakdown');
+  statusEl.innerHTML = '';
+  if (state.statusKey) {
+    var scounts = {};
+    periodRows.forEach(function (r) { var v = String(r[state.statusKey] || 'Sin dato').trim() || 'Sin dato'; scounts[v] = (scounts[v] || 0) + 1; });
+    Object.keys(scounts).sort(function (a, b) { return scounts[b] - scounts[a]; }).forEach(function (k) {
+      var tr = document.createElement('tr');
+      tr.className = 'clickable' + (state.filters.status === k ? ' selected' : '');
+      tr.innerHTML = '<td>' + k + '</td><td style="text-align:right;">' + scounts[k] + '</td>';
+      tr.onclick = function () { toggleFilter('status', k); };
+      statusEl.appendChild(tr);
+    });
+    document.getElementById('statusTotalCount').textContent = periodRows.length;
+  } else {
+    statusEl.innerHTML = '<tr><td colspan="2">No se detectó una columna de estatus.</td></tr>';
+    document.getElementById('statusTotalCount').textContent = 0;
+  }
+
   // Active filters (from chart/table clicks) narrow the detail table below
   var filteredRows = periodRows.filter(function (r) {
     if (state.filters.service && (String(r[state.serviceKey] || 'Sin dato').trim() || 'Sin dato') !== state.filters.service) return false;
     if (state.filters.responsable && (String(r[state.responsableKey] || 'Sin dato').trim() || 'Sin dato') !== state.filters.responsable) return false;
+    if (state.filters.status && (String(r[state.statusKey] || 'Sin dato').trim() || 'Sin dato') !== state.filters.status) return false;
     return true;
   });
 
   var activeFiltersEl = document.getElementById('activeFilters');
   activeFiltersEl.innerHTML = '';
-  [['service', 'Servicio'], ['responsable', 'Responsable']].forEach(function (pair) {
+  [['service', 'Servicio'], ['responsable', 'Responsable'], ['status', 'Estatus']].forEach(function (pair) {
     var field = pair[0], label = pair[1];
     if (!state.filters[field]) return;
     var chip = document.createElement('span');
